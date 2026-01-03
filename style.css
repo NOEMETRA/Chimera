@@ -1,0 +1,97 @@
+body {
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-color: #f0f2f5;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+
+.overlay {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.6);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    backdrop-filter: blur(5px);
+}
+
+.error-box {
+    background: #fff;
+    width: 90%;
+    max-width: 500px;
+    border-radius: 8px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+    overflow: hidden;
+    border-top: 4px solid #d93025;
+    animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+}
+
+.header {
+    background: #d93025;
+    color: white;
+    padding: 15px 20px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.1em;
+}
+
+.content {
+    padding: 30px 20px;
+    color: #333;
+}
+
+h3 { margin-top: 0; color: #d93025; }
+
+.code-container {
+    background: #f8f9fa;
+    border: 2px dashed #ccc;
+    padding: 15px;
+    margin: 20px 0;
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+}
+
+.label { font-size: 0.8em; color: #666; font-weight: bold; margin-bottom: 5px;}
+
+/* Il trucco visivo: un font monospazio che sembra un dato tecnico */
+.copiable {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 1.2em;
+    color: #000;
+    letter-spacing: 1px;
+    word-break: break-all;
+    cursor: text;
+    background: #e9ecef;
+    padding: 5px;
+}
+
+.warning {
+    font-size: 0.9em;
+    color: #d93025;
+    background: #fff5f5;
+    padding: 10px;
+    border-left: 3px solid #d93025;
+}
+
+.footer {
+    background: #f8f9fa;
+    padding: 10px 20px;
+    font-size: 0.8em;
+    color: #777;
+    text-align: right;
+    border-top: 1px solid #eee;
+}
+
+@keyframes shake {
+  10%, 90% { transform: translate3d(-1px, 0, 0); }
+  20%, 80% { transform: translate3d(2px, 0, 0); }
+  30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+  40%, 60% { transform: translate3d(4px, 0, 0); }
+}

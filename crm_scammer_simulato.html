@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Pannello Scammer (Simulazione)</title>
+    <!-- Simuliamo un cookie di sessione importante -->
+    <script>document.cookie = "session_id=admin_secret_123; path=/;";</script>
+    <style>
+        body {
+            background-color: #333;
+            color: lime;
+            font-family: monospace;
+            padding: 20px;
+        }
+
+        input,
+        textarea {
+            width: 80%;
+            padding: 10px;
+            margin: 10px 0;
+            background: #222;
+            color: white;
+            border: 1px solid lime;
+            display: block;
+        }
+
+        .vulnerable-sink {
+            border: 2px dashed red;
+            padding: 20px;
+            margin-top: 20px;
+            min-height: 50px;
+        }
+
+        button {
+            padding: 10px 20px;
+            background: lime;
+            border: none;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #00cc00;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>--- GESTIONALE LEAD ---</h1>
+    <p>Incolla qui i dati della vittima per salvarli nel DB:</p>
+
+    <label>Nome Vittima:</label>
+    <input type="text" id="nameInput" placeholder="Incolla qui...">
+
+    <label>Note:</label>
+    <textarea placeholder="Incolla qui le note..."></textarea>
+
+    <button onclick="salvaDati()">SALVA NEL DB</button>
+
+    <h3>LOG OPERAZIONI:</h3>
+    <div class="vulnerable-sink" id="sinkArea">
+        [I dati salvati appariranno qui... se non sanitizzati, il payload verrà eseguito]
+    </div>
+
+    <script>
+        function salvaDati() {
+            const inputVal = document.getElementById('nameInput').value;
+            // SIMULAZIONE VULNERABILITÀ CRITICA:
+            // Inseriamo l'input direttamente nell'innerHTML senza escape.
+            // Questo è ciò che permette al payload di rompere l'input e creare nuovi tag.
+
+            // Simuliamo il rendering lato server o client side insicuro
+            document.getElementById('sinkArea').innerHTML = "Ultimo dato salvato: " + inputVal;
+
+            console.log("Dati elaborati (non sanitizzati):", inputVal);
+        }
+    </script>
+</body>
+
+</html>

