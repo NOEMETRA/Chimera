@@ -1,283 +1,377 @@
-# Chimera Protocol - Active Countermeasures PoC
+# Chimera Clipboard-to-XSS Lab
 
-**Project Chimera** è un Proof of Concept (PoC) di "Difesa Attiva" progettato per identificare e tracciare operatori fraudolenti (Scammers) che copiano dati non autorizzati dalle macchine delle vittime.
+**Private single-developer proof of concept for studying how copied text can become active content when a destination application renders pasted input unsafely.**
 
-Sfrutta la fiducia implicita del sistema operativo e dei browser nel **Clipboard**, trasformando un'azione passiva (essere copiati) in un vettore di contro-attacco attivo.
+Chimera is a small controlled web-security experiment built around three steps:
 
----
+1. a source page intercepts a user-initiated copy event;
+2. the copied text is replaced with a visible decoy followed by whitespace and an HTML fragment;
+3. a deliberately vulnerable CRM simulation inserts the pasted value into `innerHTML`, allowing the fragment to become a DOM element.
 
-## 🏗 Architettura
+The project demonstrates a specific chain:
 
-Il sistema è composto da tre componenti principali:
+```text
+copy-event manipulation
+        ->
+clipboard carries an HTML-looking string as plain text
+        ->
+vulnerable destination stores the string in an input
+        ->
+destination later renders that value through innerHTML
+        ->
+HTML event handler executes in the destination origin
+```
 
-1.  **The Trap (`vittima.html`)**: La pagina esca. Sembra una normale pagina di autenticazione con un codice OTP. Contiene il motore di iniezione JavaScript che intercetta l'evento `copy` e genera dinamicamente il payload Iceberg.
-2.  **The Payload (Iceberg v2)**: Un payload stealth iniettato nel clipboard, composto da `[Decoy] + [Padding] + [XSS]`, progettato per essere invisibile agli occhi umani ma eseguibile dai browser.
-3.  **The C2 Server (`c2_server.py`)**: Un server Command & Control avanzato (Python/Flask) con supporto CORS, persistenza dati JSON, e endpoint multipli per exfiltration completa (Cookie, LocalStorage, User Agent, HTML dumps).
+Chimera is **not a general active-defense system**, not a browser exploit, and not evidence that arbitrary CRM, spreadsheet, or clipboard targets are vulnerable.
 
----
+The clipboard content remains inert unless the destination application places it into an executable HTML context without correct sanitization or output encoding.
 
-## ⚔️ Tecniche Stealth Implementate
+## Research question
 
-### 1. TECNICA ICEBERG (Visual Cloaking)
-Nasconde il codice malevolo `XSS` spingendolo fuori dall'area visibile dei campi di input.
-- **Funzionamento**: Genera una stringa composta da `[Esca] + [500 Spazi] + [Payload]`.
-- **Effetto**: Quando lo scammer incolla nel suo CRM, vede solo l'esca (es. "123456"). Il codice malevolo è "sommerso" a destra, invisibile senza uno scroll intenzionale.
+The project asks:
 
-### 2. PAYLOAD ADATTIVO (Dynamic Generation)
-Il payload viene generato dinamicamente dalla funzione `getIcebergPayload()` che:
-- **Decoy Intelligente**: Usa il testo originale copiato come esca (es. "123456" o nome vittima)
-- **Padding Configurabile**: 500 spazi invisibili che nascondono il payload
-- **XSS Stealth**: Tag `<img>` con `onerror` handler che esfiltra dati e si autodistrugge
-- **Configurazione Centralizzata**: Variabile `C2_URL` modificabile per ambienti diversi
+> Can an apparently ordinary copied value carry a hidden suffix that becomes executable only after a second application renders it through an unsafe HTML sink?
 
----
+A secondary question is:
 
-## 🚀 Istruzioni per l'Uso (Laboratorio Locale)
+> Which traces remain after the generated DOM element removes itself?
 
-### Prerequisiti
-- Python 3 installato.
-- Libreria Flask (`pip install flask`).
+The included files provide a purpose-built positive test case. They do not establish prevalence or effectiveness against real third-party systems.
 
-### 1. Avviare il Command & Control
-Apri un terminale nella cartella del progetto ed esegui:
+## Current status
+
+| Area | Current status |
+|---|---|
+| User-initiated `copy` interception | Implemented |
+| Plain-text clipboard replacement | Implemented |
+| Visible decoy plus whitespace padding | Implemented |
+| Hidden HTML fragment in copied string | Implemented |
+| Deliberately unsafe `innerHTML` sink | Implemented in the CRM fixture |
+| Event-handler execution in the fixture | Implemented under compatible browser conditions |
+| Local Flask receiver | Implemented |
+| Cookie and location collection through `/exfil` | Implemented for accessible test values |
+| JSON receiver through `/vacuum` | Implemented server-side but not used by the current clipboard payload |
+| LocalStorage collection | Not connected to the current demo |
+| Full HTML-document collection | Not connected to the current demo |
+| Dual `text/plain` and `text/html` clipboard payloads | Not implemented in the current source page |
+| Excel formula execution | Not implemented |
+| Google Sheets execution | Not established |
+| Real CRM compatibility | Not tested or claimed |
+| Production readiness | Not claimed |
+
+## Repository components
+
+```text
+Chimera/
+├── README.md
+├── vittima.html
+├── crm_scammer_simulato.html
+├── c2_server.py
+└── CHIMERA_REPORT.md
+```
+
+### `vittima.html`
+
+A source-page fixture displaying a fake one-time code.
+
+Its JavaScript listens for a user-generated `copy` event. When the experiment switch is enabled, it prevents the default copy and places a constructed string in the `text/plain` clipboard format.
+
+The string contains:
+
+```text
+selected text + whitespace padding + HTML-looking suffix
+```
+
+The padding provides visual displacement inside a single-line text field. It is not a security boundary or a reliable stealth mechanism.
+
+### `crm_scammer_simulato.html`
+
+A deliberately vulnerable destination fixture.
+
+The pasted value first enters a normal text input, where it is inert. Execution occurs only after the user presses the save button and the page performs:
+
+```javascript
+document.getElementById("sinkArea").innerHTML =
+    "Ultimo dato salvato: " + inputVal;
+```
+
+This unsafe `innerHTML` assignment is the actual injection sink.
+
+The file also creates a synthetic session cookie for the local experiment. Browser behavior for cookies on `file://` pages is inconsistent or restricted; for a repeatable test, serve the HTML files through a local HTTP origin rather than relying on direct file URLs.
+
+### `c2_server.py`
+
+A Flask receiver exposing:
+
+- `/ping` for a simple health response;
+- `/exfil` for Base64-encoded cookie and location query parameters;
+- `/vacuum` for arbitrary JSON fields written into `loot_dumps/`;
+- `/track` for a simple source marker.
+
+The current `vittima.html` payload calls `/exfil` only. It does not call `/vacuum` and does not collect LocalStorage or a full HTML dump.
+
+The receiver is lab code, not a hardened service. It currently:
+
+- binds to `0.0.0.0`;
+- enables Flask debug mode;
+- accepts cross-origin requests from any origin;
+- has no authentication;
+- performs minimal input validation;
+- writes received JSON to disk;
+- places selected data in console and URL-visible form.
+
+Do not expose it to a public or shared network.
+
+### `CHIMERA_REPORT.md`
+
+A historical project report written during the initial experiment. It contains stronger terminology and several capabilities not present in the current source, including dual clipboard MIME handling and broader collection claims.
+
+Treat this README and the executable code as the current description of the project.
+
+## What actually triggers execution
+
+The clipboard is only a carrier.
+
+The full positive condition is:
+
+```text
+A. The source page receives a real copy event.
+B. The browser permits ClipboardEvent data replacement.
+C. The target receives the entire plain-text value.
+D. The value is later inserted into an HTML parser context.
+E. The target does not encode or sanitize the value correctly.
+F. Content Security Policy and browser defenses permit the event handler.
+G. The receiver URL is reachable from the target context.
+```
+
+If any condition fails, the chain can stop.
+
+Examples:
+
+- pasting into a text-only system does not execute HTML;
+- assigning with `textContent` does not execute HTML;
+- server-side HTML encoding neutralizes the fragment;
+- a robust sanitizer can remove unsafe attributes or elements;
+- CSP can block inline event handlers or network destinations;
+- field-length limits can truncate the suffix;
+- the destination may strip or normalize whitespace;
+- browser clipboard behavior can differ by context and permission model.
+
+## Data collected by the current demo
+
+The current HTML suffix attempts to send two values to `/exfil`:
+
+- `document.cookie`;
+- `document.location` converted to text.
+
+### Cookie boundary
+
+`document.cookie` exposes only cookies available to JavaScript for that origin.
+
+It does not expose:
+
+- `HttpOnly` cookies;
+- cookies belonging to another origin;
+- cookies blocked by browser policy;
+- server-side session data not present in the cookie value.
+
+A successful request with an empty cookie value is still compatible with correct browser security behavior.
+
+### Location boundary
+
+The location identifies the page context in which the event handler ran. It does not provide geographic location.
+
+### Source IP boundary
+
+The Flask receiver can observe the network source address of the incoming request. This may be a loopback, proxy, NAT gateway, VPN exit, corporate egress address, or other intermediary. It does not identify a person.
+
+## Self-removal and forensic traces
+
+The generated image element calls `this.remove()` after its error handler runs.
+
+This removes that DOM node. It does **not** guarantee zero traces.
+
+Possible remaining evidence includes:
+
+- the original clipboard content;
+- the value stored in the input before rendering;
+- residual text and quotation characters in the sink;
+- application database records;
+- browser console entries;
+- network and proxy logs;
+- the attempted relative request produced by the invalid image source;
+- the receiver request and query string;
+- browser history or developer-tool records;
+- server-side access logs;
+- the Flask console output;
+- JSON files written by `/vacuum` when that endpoint is used.
+
+The project is therefore useful for studying both injection and detection.
+
+## Requirements
+
+- Python 3;
+- Flask;
+- a modern browser;
+- an isolated local test environment.
+
+Install Flask:
+
+```bash
+python -m pip install flask
+```
+
+## Recommended local setup
+
+Use one local HTTP origin for the two HTML fixtures and a separate loopback port for the Flask receiver.
+
+For example, in the repository directory, start a static server:
+
+```bash
+python -m http.server 8000 --bind 127.0.0.1
+```
+
+In another terminal, start the receiver:
+
 ```bash
 python c2_server.py
 ```
-*Il server ascolterà su `http://127.0.0.1:5000` e creerà automaticamente la directory `loot_dumps/` per salvare i dati esfiltrati.*
 
-**Output atteso:**
-```
-[*] C2 Vacuum Server running on port 5000...
-```
+Then open the fixtures through the local static server rather than by double-clicking the files:
 
-### 2. Preparare la Trappola
-Apri il file `vittima.html` nel tuo browser. Questa sarà la pagina "vittima".
-
-### 3. Simulare l'Attacco (XSS Web)
-1. Apri `crm_scammer_simulato.html` in un'altra scheda o finestra.
-2. Vai su `vittima.html`, seleziona il codice **123456** e copialo (`CTRL+C`).
-3. **Verifica nella Console** (F12): Dovresti vedere:
-   ```
-   [PASSIVE INTEL] Lo scammer sta copiando: "123456"
-   [ACTIVE DEFENSE] Intercettazione copia. Iniezione Iceberg avviata.
-   ```
-4. Vai su `crm_scammer_simulato.html` e incolla (`CTRL+V`) nel campo "Nome Vittima".
-5. **Osserva**: Vedrai solo "123456" (Iceberg Effect - il payload è nascosto a destra).
-6. Clicca **"SALVA NEL DB"**.
-7. **Controlla il Terminale del C2**: Vedrai un log dettagliato:
-   ```
-   [!!!] LOOT RECEIVED (Legacy GET) AT 2025-12-30 14:51:20 [!!!]
-   Source IP: 127.0.0.1
-   Location: file:///C:/Users/.../crm_scammer_simulato.html
-   Cookies : session_id=admin_secret_123
-   ```
-8. **Controlla il Browser**: Il payload si sarà auto-rimosso dal DOM (`this.remove()`), lasciando zero tracce visibili.
-
-### 4. Simulare l'Attacco (Excel - Safe Fail)
-1. Copia il codice da `vittima.html`.
-2. Incolla in una cella di Excel.
-3. **Risultato**: Excel (nelle versioni moderne protette) incollerà i numeri "123456" prendendo il testo semplice o l'HTML pulito, evitando l'esecuzione della formula. Questo è un comportamento "Safe Fail": l'attacco non parte, ma non veniamo scoperti.
-
----
-
-## 🔌 Endpoint del C2 Server
-
-Il server `c2_server.py` espone i seguenti endpoint:
-
-### 1. `/exfil` (GET) - Legacy Exfiltration
-Riceve dati esfiltrati dal payload Iceberg via query parameters.
-
-**Parametri:**
-- `c`: Cookie (base64 encoded)
-- `l`: Location/URL (base64 encoded)
-
-**Esempio:**
-```
-GET /exfil?c=c2Vzc2lvbl9pZD1hZG1pbl9zZWNyZXRfMTIz&l=ZmlsZTovLy9DL1VzZXJzLy4uLg==
+```text
+http://127.0.0.1:8000/vittima.html
+http://127.0.0.1:8000/crm_scammer_simulato.html
 ```
 
-**Output Console:**
-```
-[!!!] LOOT RECEIVED (Legacy GET) AT 2025-12-30 14:51:20 [!!!]
-Source IP: 127.0.0.1
-Location: file:///C:/Users/.../crm_scammer_simulato.html
-Cookies : session_id=admin_secret_123
+Before testing, verify that `C2_URL` in `vittima.html` points to:
+
+```text
+http://127.0.0.1:5000
 ```
 
-### 2. `/vacuum` (POST) - Advanced Data Exfiltration
-Endpoint avanzato per ricevere payload JSON completi con dati massivi.
+This setup remains laboratory-only. The Flask server currently listens on all interfaces, so use a host firewall or change the source to bind explicitly to loopback before running on a machine connected to an untrusted network.
 
-**Payload JSON:**
-```json
-{
-  "u": "https://crm.example.com/dashboard",
-  "c": "session_id=xyz; auth_token=abc",
-  "ua": "Mozilla/5.0...",
-  "ls": "{\"jwt\":\"eyJhbGc...\"}",
-  "html": "<html>...</html>"
-}
-```
+## Controlled demonstration
 
-**Campi:**
-- `u`: URL del CRM/sistema compromesso
-- `c`: Cookie completi
-- `ua`: User Agent del browser
-- `ls`: LocalStorage (può contenere JWT tokens!)
-- `html`: Dump completo HTML della pagina
+1. Start the local static server and Flask receiver.
+2. Open both fixture pages through `127.0.0.1`.
+3. Select the visible test code on `vittima.html`.
+4. Copy it using a normal browser copy action.
+5. Paste it into the CRM fixture's name field.
+6. Inspect the field value before pressing save.
+7. Press the save button.
+8. Observe the CRM DOM, browser network panel, and Flask console.
+9. Record whether a request reached `/exfil` and which values were present.
+10. Repeat after replacing the vulnerable `innerHTML` assignment with `textContent`.
 
-**Dati Salvati:**
-Crea file in `loot_dumps/loot_YYYYMMDD-HHMMSS_IP.json` con tutto il payload.
+The final repetition is the essential negative control. The payload should remain visible or stored as text without becoming an active element.
 
-### 3. `/track` (GET) - Excel/CSV Trigger
-Traccia quando un file Excel/CSV contenente formule viene aperto.
+## Expected result under the positive fixture
 
-**Parametri:**
-- `src`: Sorgente del trigger (es. "xls", "csv")
+Under compatible conditions, the controlled fixture may demonstrate:
 
-### 4. `/ping` (GET) - Health Check
-Test di connettività del server C2.
+- the copied value differs from the visibly selected value;
+- the long suffix is not immediately visible inside the text field;
+- the value is inert while it remains an input value;
+- pressing save passes the value to an unsafe HTML sink;
+- the injected element is parsed;
+- its error handler makes a request to the local receiver;
+- the element removes itself afterward.
 
-**Risposta:** `pong`
+The strongest valid conclusion is:
 
----
+> A copy-event handler transported a hidden plain-text suffix into a deliberately unsafe `innerHTML` sink, where it became executable DOM content in the controlled fixture.
 
-## 📂 Struttura dei File Salvati
+## What the experiment does not prove
 
-Quando il C2 riceve dati via `/vacuum`, salva tutto in:
+It does not prove that:
 
-```
-loot_dumps/
-├── loot_20251230-145120_127.0.0.1.json
-├── loot_20251230-150345_192.168.1.100.json
-└── ...
-```
+- all browsers allow the same clipboard replacement behavior;
+- a real CRM uses an equivalent sink;
+- a real application preserves 500 spaces;
+- the suffix is invisible in every interface;
+- a remote browser would reach the receiver;
+- CSP, Trusted Types, sanitization, or output encoding can be bypassed;
+- HttpOnly session cookies can be read;
+- spreadsheets execute the payload;
+- a public receiver would make Google Sheets work;
+- the technique has a 95% success rate;
+- the generated request identifies an operator;
+- DOM removal eliminates forensic evidence.
 
-**Formato JSON:**
-```json
-{
-    "u": "https://crm-scammer.example.com/admin",
-    "c": "session_id=admin_secret_123; PHPSESSID=abc...",
-    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)...",
-    "ls": "{\"auth_token\":\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\"}",
-    "html": "<!DOCTYPE html><html>...</html>"
-}
-```
+No efficacy percentage is assigned because the repository contains one intentionally vulnerable positive fixture rather than a representative target set.
 
-Questi file possono essere analizzati per:
-- **Forensics**: Timestamping degli attacchi
-- **Intelligence**: Identificazione infrastruttura scammer
-- **Evidence**: Prove per segnalazioni legali
+## Security controls demonstrated by the negative case
 
----
+The CRM fixture can be hardened by changing the render step to:
 
-## ⚙️ Configurazione Avanzata
-
-### Cambiare l'URL del C2
-Modifica la variabile in `vittima.html`:
 ```javascript
-const C2_URL = "http://127.0.0.1:5000"; // Locale
-// const C2_URL = "https://your-server.com"; // Remoto
+document.getElementById("sinkArea").textContent =
+    "Ultimo dato salvato: " + inputVal;
 ```
 
-### Deploy del C2 su Server Remoto
-Per usare Chimera in ambienti non-locali:
+Other relevant controls include:
 
-1. Deploy `c2_server.py` su un VPS (es. DigitalOcean, AWS)
-2. Configura firewall per porta 5000
-3. (Opzionale) Aggiungi HTTPS con reverse proxy nginx
-4. Aggiorna `C2_URL` in `vittima.html`
+- contextual output encoding;
+- allowlist-based HTML sanitization when HTML is genuinely required;
+- Content Security Policy without unsafe inline handlers;
+- Trusted Types in supported applications;
+- `HttpOnly`, `Secure`, and appropriate `SameSite` cookie settings;
+- input length limits as a secondary control;
+- logging unusually long or markup-bearing pasted values;
+- avoiding storage of raw untrusted HTML;
+- outbound-network restrictions from sensitive administrative applications.
 
-**IMPORTANTE:** Usa solo su server autorizzati e per scopi legali.
+Input validation alone is not a complete XSS defense; the primary control is safe handling at the output sink.
 
-### Disabilitare Active Defense
-Per mostrare solo log passivo senza attacco:
-```javascript
-const ATTACK_SWITCH = false; // Disabilita iniezione
-```
+## Known limitations
 
----
+- The test page and vulnerable destination are designed to fit each other.
+- Only the `text/plain` clipboard format is set.
+- The current source does not implement the dual-MIME technique described in the historical report.
+- The `/vacuum` receiver is disconnected from the current clipboard payload.
+- The demo cookie may not behave correctly when pages are opened through `file://`.
+- The image `src=x` request can create a visible relative-resource error before the external fetch.
+- Base64 in a URL is encoding, not confidentiality.
+- Query parameters can be retained in logs and intermediary systems.
+- `btoa()` can fail on non-Latin-1 strings.
+- Wildcard CORS is unnecessary for some send-only patterns and unsafe as a general server default.
+- Flask debug mode and `0.0.0.0` binding are inappropriate outside an isolated lab.
+- Filenames based only on second-resolution timestamps and source IP can collide.
+- `/vacuum` accepts arbitrary JSON without size limits or schema validation.
+- The current test suite is manual.
+- No browser or sanitizer compatibility matrix is included.
 
-## 📊 Risultati dei Test
+## Intended use
 
-### ✅ Test di Successo
+Chimera is intended for:
 
-| Vettore | Target | Risultato | Note |
-|---------|--------|-----------|------|
-| **Iceberg XSS** | CRM Web Simulato | ✅ **SUCCESSO** | Stealth massimo, exfiltration completa, self-destruction confermata |
-| **Iceberg XSS** | Google Sheets | ⚠️ **BLOCCATO** | Google blocca URL localhost, funzionerebbe con C2 pubblico |
-| **Iceberg XSS** | Excel Moderno | ❌ **SAFE FAIL** | Excel ignora payload (non inizia con `=`), ma nessun alert |
-| **Clipboard Hijack** | Tutti i Browser | ✅ **SUCCESSO** | Copy event interceptato correttamente |
-| **C2 Exfiltration** | Flask Server | ✅ **SUCCESSO** | Dati ricevuti e salvati in JSON |
+- private web-security research;
+- controlled clipboard-behavior experiments;
+- XSS training with deliberately vulnerable fixtures;
+- testing safe rendering and sanitization controls;
+- studying the forensic traces left by self-removing DOM payloads.
 
-### 🎯 Efficacia per Target
+It is not intended for deployment against people, third-party applications, real administrative systems, or any browser context without explicit ownership and authorization.
 
-**Target Primario - CRM Web (95% Efficacia):**
-- ✅ Payload invisibile nel campo input
-- ✅ XSS execution silenziosa
-- ✅ Cookie rubati con successo
-- ✅ Tracce cancellate automaticamente
+## Development direction
 
-**Target Secondario - Excel (5% Efficacia):**
-- ❌ Versioni moderne hanno protezioni avanzate
-- ✅ Non viene rilevato come minaccia (safe fail)
-- ⚠️ Possibile funzionamento su Excel legacy non patchato
+Useful next steps include:
 
----
+- adding a safe and vulnerable CRM mode side by side;
+- serving all fixtures through a reproducible local harness;
+- adding Playwright tests for supported browsers;
+- recording the exact clipboard MIME contents;
+- validating that the payload remains inert in `textContent`, textarea, and server-encoded outputs;
+- adding CSP and sanitizer test matrices;
+- removing debug mode and wildcard CORS from the default receiver;
+- binding the receiver to loopback by default;
+- adding request-size limits and a typed schema;
+- separating collection endpoints from the basic proof of execution;
+- replacing success language with observable assertions;
+- adding negative tests for HttpOnly cookies and truncated fields.
 
-## 🔬 Note Tecniche
+## License
 
-### Trade-off Strategici
-
-**Iceberg vs Chimera Polyglot:**
-
-| Caratteristica | Iceberg (v2) | Chimera Polyglot (v1) |
-|----------------|--------------|------------------------|
-| Stealth Visivo | ⭐⭐⭐⭐⭐ | ⭐⭐ |
-| Compatibilità Excel | ⭐ | ⭐⭐⭐⭐ |
-| Efficacia CRM Web | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ |
-| Social Engineering | ⭐⭐⭐⭐⭐ | ⭐⭐ |
-
-**Decisione Implementativa:** Iceberg è stato scelto per massimizzare lo stealth contro il target primario (CRM web dei call center), sacrificando la compatibilità Excel che risulta marginale negli scenari reali.
-
-### Limitazioni Conosciute
-
-1. **CORS Restrictions**: Alcuni browser moderni potrebbero bloccare fetch cross-origin senza HTTPS
-2. **CSP Headers**: CRM con Content Security Policy strict bloccano inline scripts
-3. **Input Sanitization**: CRM che usano DOMPurify o simili neutralizzano l'XSS
-4. **Google Sheets**: Blocca URL localhost/IP privati nelle formule
-
-### Contromisure Possibili (Per Difendersi)
-
-Se sei un amministratore di sistema e vuoi proteggerti da questa tecnica:
-
-1. **Sanitizza sempre l'input**: Usa `textContent` invece di `innerHTML`
-2. **Implementa CSP**: `Content-Security-Policy: default-src 'self'`
-3. **Monitora clipboard**: Controlla lunghezza anomala dei dati incollati
-4. **Input validation**: Limita lunghezza massima e caratteri speciali
-5. **User awareness**: Forma gli operatori a riconoscere comportamenti sospetti
-
----
-
-## 📚 Casi d'Uso Legittimi
-
-Questo PoC può essere utilizzato legalmente in:
-
-1. **Honeypot per Call Center**: Identificare operatori interni che rubano dati clienti
-2. **Red Team Engagements**: Testare la sicurezza di CRM aziendali (con autorizzazione)
-3. **CTF/Bug Bounty**: Competizioni di sicurezza informatica
-4. **Security Research**: Studio di tecniche di active defense
-5. **Training**: Formazione su social engineering e clipboard attacks
-
----
-
-## ⚠️ Disclaimer
-
-Questo software è stato sviluppato a scopo puramente educativo e di ricerca per lo studio di contromisure difensive (Active Defense).
-
-**IMPORTANTE:**
-- ❌ L'uso contro sistemi non autorizzati è **ILLEGALE**
-- ✅ Utilizzare solo in ambienti controllati di tua proprietà
-- ✅ Richiedere autorizzazione scritta per penetration testing
-- ❌ Non distribuire a terzi senza questo disclaimer
-
-L'autore non si assume responsabilità per usi impropri del software.
+See the repository license, when present, for the current terms of use.
