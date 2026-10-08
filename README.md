@@ -1,6 +1,6 @@
 # Chimera Clipboard-to-XSS Lab
 
-**Private single-developer proof of concept for studying how copied text can become active content when a destination application renders pasted input unsafely.**
+**Independent, publicly documented single-developer proof of concept for studying how copied text can become active content when a destination application renders pasted input unsafely.**
 
 Chimera is a small controlled web-security experiment built around three steps:
 
