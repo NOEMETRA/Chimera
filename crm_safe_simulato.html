@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chimera — Safe CRM Control Fixture</title>
+  <style>
+    body { font: 16px/1.5 system-ui, sans-serif; max-width: 48rem; margin: 3rem auto; padding: 0 1.5rem; }
+    label, input { display: block; width: 100%; }
+    input { padding: 0.6rem; margin: 0.5rem 0 1rem; box-sizing: border-box; }
+    button { padding: 0.6rem 1rem; }
+    #sinkArea { margin-top: 1.5rem; border: 2px solid #237a57; padding: 1rem; overflow-wrap: anywhere; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>CRM control — safe rendering</h1>
+  <p>Negative control for Chimera's deliberately vulnerable CRM fixture. This page keeps pasted input inert as text.</p>
+  <label for="nameInput">Nome</label>
+  <input type="text" id="nameInput" autocomplete="off">
+  <button id="saveButton" type="button">SALVA NEL DB (simulazione)</button>
+  <div id="sinkArea" aria-live="polite">I dati salvati appariranno qui come testo.</div>
+  <script>
+    document.getElementById("saveButton").addEventListener("click", function () {
+      const inputVal = document.getElementById("nameInput").value;
+      document.getElementById("sinkArea").textContent = "Ultimo dato salvato: " + inputVal;
+    });
+  </script>
+</body>
+</html>
