@@ -128,6 +128,21 @@ A historical project report written during the initial experiment. It contains s
 
 Treat this README and the executable code as the current description of the project.
 
+## Negative control: safe CRM rendering
+
+The repository now includes two destination fixtures with the same input/output IDs:
+
+| Fixture | Rendering | Expected observation |
+| --- | --- | --- |
+| `crm_scammer_simulato.html` | Deliberately unsafe `innerHTML` sink | The copied HTML-like suffix can become markup under compatible browser conditions. |
+| `crm_safe_simulato.html` | `textContent` sink | The same copied value remains inert, visible text. |
+
+This paired design makes it possible to compare a positive case with a concrete safe negative control, instead of treating execution in a deliberately vulnerable fixture as sufficient evidence of a broader exploit.
+
+The safe fixture does not collect cookies or transmit data. The included CI checks file structure, source syntax, and intended sinks **without running any browser payload or receiver**. Those static checks are not a substitute for a controlled browser compatibility matrix.
+
+To use the fixtures manually, keep the experiment on local loopback and compare the output of both CRM pages with the same controlled sample. Do not expose `c2_server.py` to a shared network: its historical implementation binds to all interfaces and runs in debug mode.
+
 ## What actually triggers execution
 
 The clipboard is only a carrier.
